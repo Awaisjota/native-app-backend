@@ -69,7 +69,7 @@ const rideSchema = new mongoose.Schema(
     // 🚗 Vehicle (driver only)
     vehicleType: {
       type: String,
-      enum: ["car", "van", "bike", "wagnar", "ambulance", "special car", "other"],
+      enum: ["Car", "Van", "Bike", "Wagnar", "Ambulance", "Special Car", "Other"],
     },
 
     // 💺 Seats (driver only)

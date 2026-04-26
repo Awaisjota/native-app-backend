@@ -51,7 +51,9 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-
+    if(user.isBlocked){
+      return res.status(403).json({ message: "Your account is blocked. Please contact support." });
+    }
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -86,6 +88,7 @@ export const login = async (req, res) => {
 
     res.json({
       token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -104,7 +107,7 @@ export const refreshTokenHandler = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-      return res.status(400).json({ message: "No refresh token provided" });
+      return res.status(401).json({ message: "No refresh token" });
     }
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
@@ -112,11 +115,7 @@ export const refreshTokenHandler = async (req, res) => {
     const user = await User.findById(decoded.id);
 
     if (!user || user.refreshToken !== refreshToken) {
-      return res.status(400).json({ message: "Invalid refresh token" });
-    }
-
-    if (decoded.tokenVersion !== user.tokenVersion) {
-      return res.status(401).json({ message: "Token expired" });
+      return res.status(401).json({ message: "Invalid refresh token" });
     }
 
     const payload = {
@@ -125,7 +124,6 @@ export const refreshTokenHandler = async (req, res) => {
       tokenVersion: user.tokenVersion,
     };
 
-    // 🔐 new tokens
     const newToken = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
@@ -139,14 +137,13 @@ export const refreshTokenHandler = async (req, res) => {
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 15 * 24 * 60 * 60 * 1000,
+      secure: false, // dev
+      sameSite: "lax",
     });
 
     res.json({ token: newToken });
   } catch (error) {
-    res.status(401).json({ message: "Invalid or expired refresh token" });
+    res.status(401).json({ message: "Invalid refresh token" });
   }
 };
 
@@ -288,3 +285,53 @@ export const getAllUsers = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 }; 
+
+
+export const getMyProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+
+
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, email, contactNumber, city } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ SAFE UPDATE
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (contactNumber !== undefined)
+      user.contactNumber = contactNumber;
+    if (city !== undefined) user.city = city;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};

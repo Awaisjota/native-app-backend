@@ -30,14 +30,10 @@ export const registerValidation = [
   body("password")
     .notEmpty()
     .withMessage("Password is required!")
-    .isLength({ min: 8 })
-    .withMessage("Password must be 8 characters")
-    .matches(/[A-Z]/)
-    .withMessage("Must contain at least one uppercase letter")
-    .matches(/[a-z]/)
-    .withMessage("Must contain at least one lowercase letter")
-    .matches(/[!@#$%^&*(),.?":{}|<>]/)
-    .withMessage("Must contain at least one special character"),
+    .isLength({ min: 6 })
+    .withMessage("Minimum 6 characters required")
+    .matches(/\d/)
+    .withMessage("Must contain at least one number"),
 
   body("contactNumber")
     .notEmpty()
@@ -95,14 +91,7 @@ export const resetValidation = [
     .withMessage("OTP must be 6 characters"),
 
   body("newPassword")
-    .notEmpty()
-    .withMessage("New Password is required!")
-    .isLength({ min: 8 })
-    .withMessage("Password must be 8 characters")
-    .matches(/[A-Z]/)
-    .withMessage("Must contain at least one uppercase letter")
-    .matches(/[a-z]/)
-    .withMessage("Must contain at least one lowercase letter")
-    .matches(/[!@#$%^&*(),.?":{}|<>]/)
-    .withMessage("Must contain at least one special character"),
+  .notEmpty().withMessage("Password is required!")
+  .isLength({ min: 6 }).withMessage("Minimum 6 characters required")
+  .matches(/\d/).withMessage("Must contain at least one number"),
 ];

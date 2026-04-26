@@ -1,18 +1,22 @@
 import Ride from "../models/Ride.js";
-
+import {getIO} from "../socket/socket.js";
 /* =======================================
    CREATE RIDE
 ======================================= */
 export const createRide = async (req, res) => {
   try {
-     console.log("BODY:", req.body);
-    console.log("USER:", req.user);
+    // // console.log("BODY:", req.body);
+    // // console.log("USER:", req.user);
     const newRide = await Ride.create({
-  ...req.body,
-  user: req.user._id,
-});
+      ...req.body,
+      user: req.user._id,
+    });
 
-const ride = await newRide.populate("user", "name email");
+    const ride = await newRide.populate("user", "name email");
+
+    // Emit event to all connected clients
+    const io = getIO();
+    io.to("rides").emit("rideCreated", ride);
 
     res.status(201).json({
       message: "Ride created successfully",
@@ -62,7 +66,7 @@ export const getSingleRide = async (req, res) => {
 ======================================= */
 export const getMyRides = async (req, res) => {
   try {
-    console.log("USER IN REQUEST:", req.user);
+    // console.log("USER IN REQUEST:", req.user);
     if (!req.user) {
       return res.status(401).json({ message: "User not found in request" });
     }
@@ -73,7 +77,7 @@ export const getMyRides = async (req, res) => {
 
     res.json(rides);
   } catch (error) {
-    console.log("MY RIDES ERROR:", error);
+    // console.log("MY RIDES ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -103,10 +107,15 @@ export const updateRide = async (req, res) => {
     const newUpdatedRide = await Ride.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
+      { new: true },
     );
-    
+
     const updatedRide = await newUpdatedRide.populate("user", "name email");
+
+    // Emit event to all connected clients
+    const io = getIO();
+    io.to("rides").emit("rideUpdated", updatedRide);
+
 
     res.status(200).json(updatedRide);
   } catch (error) {
@@ -131,6 +140,10 @@ export const deleteRide = async (req, res) => {
 
     await ride.deleteOne();
 
+    // Emit event to all connected clients
+    const io = getIO();
+    io.to("rides").emit("rideDeleted", ride);
+
     res.status(200).json({ message: "Ride deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -154,6 +167,11 @@ export const completeRide = async (req, res) => {
 
     ride.isCompleted = true;
     await ride.save();
+
+    // Emit event to all connected clients
+    const io = getIO();
+    io.to("rides").emit("rideCompleted", ride);
+
 
     res.status(200).json({
       message: "Ride marked as completed",
@@ -183,38 +201,46 @@ export const addComment = async (req, res) => {
       return res.status(400).json({ message: "Comment required" });
     }
 
-    // 🔥 FORCE ARRAY INIT (IMPORTANT FIX)
+    // 🔥 ensure array
     if (!Array.isArray(ride.comments)) {
       ride.comments = [];
     }
 
+    // new comment
     const newComment = {
       user: req.user._id,
       text: req.body.text.trim(),
       createdAt: new Date(),
     };
 
-    // 🔥 PUSH
-    ride.comments.push(newComment);
+    ride.comments.unshift(newComment);
 
-    // 🔥 FORCE SAVE WITH VALIDATION
-    const savedRide = await ride.save();
+    // save
+    await ride.save();
 
-    if (!savedRide) {
-      return res.status(500).json({ message: "Failed to save comment" });
-    }
+    // 🔥 RE-FETCH (FIX FOR REALTIME + POPULATE ISSUE)
+    const updatedRide = await Ride.findById(req.params.id).populate(
+      "comments.user",
+      "name"
+    );
 
-    // 🔥 populate user before sending response
-    await savedRide.populate("comments.user", "name");
+    const latestComment = updatedRide.comments[0];
 
-    const latestComment =
-      savedRide.comments[savedRide.comments.length - 1];
+    // socket
+    const io = getIO();
 
-    res.status(201).json(latestComment);
+const commentPayload = {
+  ...latestComment.toObject?.() || latestComment,
+  rideId: req.params.id,
+};
+
+io.to(req.params.id).emit("commentAdded", commentPayload);
+
+return res.status(201).json(commentPayload)
 
   } catch (error) {
-    console.log("COMMENT ERROR:", error);
-    res.status(500).json({ message: error.message });
+    // console.log("COMMENT ERROR:", error);
+    return res.status(500).json({ message: error.message });
   }
 };
 /* =======================================
@@ -222,8 +248,10 @@ export const addComment = async (req, res) => {
 ======================================= */
 export const getComments = async (req, res) => {
   try {
-    const ride = await Ride.findById(req.params.id)
-      .populate("comments.user", "name");
+    const ride = await Ride.findById(req.params.id).populate(
+      "comments.user",
+      "name",
+    );
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });

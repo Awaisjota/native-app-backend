@@ -18,6 +18,9 @@ export const protect = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
+    if(user.isBlocked){
+      return res.status(403).json({ message: "Your account is blocked. Please contact support." });
+    }
 
     if (user.tokenVersion !== decoded.tokenVersion) {
       return res.status(401).json({ message: "Token expired" });
@@ -25,10 +28,11 @@ export const protect = async (req, res, next) => {
 
     // ✅ standard user object
     req.user = {
-      _id: user._id,
-      email: user.email,
-      name: user.name,
-    };
+  _id: user._id,
+  email: user.email,
+  name: user.name,
+  role: user.role,   // 👈 ADD THIS
+};
 
     next();
   } catch (error) {

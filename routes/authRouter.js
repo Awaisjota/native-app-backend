@@ -15,6 +15,8 @@ import {
   register,
   resetPassword,
   refreshTokenHandler,
+  getMyProfile,
+  updateProfile,
 } from "../controllers/authControllers.js";
 
 import { validate } from "../middleware/validate.js";
@@ -34,6 +36,8 @@ router.post("/refresh-token", refreshTokenHandler);
 
 // ================= LOGOUT =================
 router.post("/logout", protect, logout);
+router.get("/profile", protect, getMyProfile);
+router.put("/update-profile", protect, updateProfile);
 
 // ================= ADMIN ROUTE (INLINE FIX) =================
 router.get(

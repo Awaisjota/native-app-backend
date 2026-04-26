@@ -34,6 +34,12 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    // ⛔ ADD THIS
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+
     // 📍 Location
     city: {
       type: String,
@@ -43,7 +49,6 @@ const userSchema = new mongoose.Schema(
     address: {
       type: String, // optional
     },
-
 
     // 📸 Profile Image (optional)
     profileImage: {
@@ -62,7 +67,7 @@ const userSchema = new mongoose.Schema(
     otp: String,
     otpExpiry: Date,
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("User", userSchema);

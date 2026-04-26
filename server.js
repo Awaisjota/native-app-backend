@@ -17,13 +17,7 @@ const app = express();
 // middleware
 app.use(
   cors({
-    origin: [
-      "http://192.168.43.229:5173",
-      "http://192.168.43.229:8081",
-      "http://192.168.43.229:8080",
-      "http://192.168.43.229:8082",
-      "http://localhost:8081",
-    ],
+    origin:  true, // Allow all origins (for development). Change in production!
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })

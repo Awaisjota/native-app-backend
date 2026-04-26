@@ -15,10 +15,21 @@ connectDB();
 const app = express();
 
 // middleware
+const allowedOrigins = [
+  "http://192.168.43.229:5173",
+  "http://localhost:8081",
+  "https://your-frontend-domain.com"
+];
+
 app.use(
   cors({
-    origin:  true, // Allow all origins (for development). Change in production!
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // mobile apps ko allow kar do
+      }
+    },
     credentials: true,
   })
 );

@@ -1,97 +1,84 @@
 import { body } from "express-validator";
-import User from "../models/User.js";
-import bcrypt from "bcryptjs";
 
-// ================= REGISTER =================
+/* ================= REGISTER ================= */
 export const registerValidation = [
   body("name")
     .trim()
     .notEmpty()
     .withMessage("Name is required")
     .isLength({ min: 3 })
-    .withMessage("Name must be at least 3 characters"),
+    .withMessage("Min 3 characters"),
 
   body("email")
     .trim()
     .normalizeEmail()
     .notEmpty()
-    .withMessage("Email is required")
+    .withMessage("Email required")
     .isEmail()
-    .withMessage("Invalid email format")
-    .custom(async (email) => {
-      const existingUser = await User.findOne({
-        email: email.toLowerCase(),
-      });
-      if (existingUser) {
-        throw new Error("Email already in use");
-      }
-    }),
+    .withMessage("Invalid email"),
 
   body("password")
     .notEmpty()
-    .withMessage("Password is required!")
+    .withMessage("Password required")
     .isLength({ min: 6 })
-    .withMessage("Minimum 6 characters required")
-    .matches(/\d/)
-    .withMessage("Must contain at least one number"),
+    .withMessage("Min 6 chars")
+    .matches(/^(?=.*[0-9])(?=.*[a-zA-Z]).{6,}$/)
+    .withMessage("Must contain letters & numbers"),
 
   body("contactNumber")
     .notEmpty()
-    .withMessage("Contact number is required")
-    .isMobilePhone("en-PK")
-    .withMessage("Invalid contact number format"),
+    .withMessage("Contact required")
+    .isMobilePhone()
+    .withMessage("Invalid number"),
 
   body("city")
     .trim()
     .notEmpty()
-    .withMessage("City is required"),
-
+    .withMessage("City required"),
 ];
 
-// ================= LOGIN =================
+/* ================= LOGIN ================= */
 export const loginValidation = [
   body("email")
     .trim()
     .normalizeEmail()
     .notEmpty()
-    .withMessage("Email is required!")
-    .isEmail()
-    .withMessage("Invalid email"),
+    .withMessage("Email required")
+    .isEmail(),
 
   body("password")
     .notEmpty()
-    .withMessage("Password is required"),
+    .withMessage("Password required"),
 ];
 
-// ================= FORGOT =================
+/* ================= FORGOT ================= */
 export const forgotValidation = [
   body("email")
     .trim()
     .normalizeEmail()
     .notEmpty()
-    .withMessage("Email is required!")
-    .isEmail()
-    .withMessage("Invalid email"),
+    .withMessage("Email required")
+    .isEmail(),
 ];
 
-// ================= RESET =================
+/* ================= RESET ================= */
 export const resetValidation = [
   body("email")
     .trim()
     .normalizeEmail()
     .notEmpty()
-    .withMessage("Email is required!")
-    .isEmail()
-    .withMessage("Invalid email"),
+    .withMessage("Email required")
+    .isEmail(),
 
   body("otp")
     .notEmpty()
-    .withMessage("OTP is required!")
-    .isLength({ min: 6, max: 6 })
-    .withMessage("OTP must be 6 characters"),
+    .withMessage("OTP required")
+    .matches(/^\d{6}$/)
+    .withMessage("OTP must be 6 digits"),
 
   body("newPassword")
-  .notEmpty().withMessage("Password is required!")
-  .isLength({ min: 6 }).withMessage("Minimum 6 characters required")
-  .matches(/\d/).withMessage("Must contain at least one number"),
+    .notEmpty()
+    .withMessage("Password required")
+    .isLength({ min: 6 })
+    .withMessage("Min 6 characters"),
 ];

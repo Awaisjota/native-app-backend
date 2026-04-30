@@ -1,33 +1,55 @@
 import express from "express";
+
 import {
   getAdminStats,
   getAllUsers,
   getAllRides,
   deleteRide,
   blockUser,
+  unblockUser,
   searchUsers,
   getUserDetails,
   updateRideStatus,
-  unblockUser,
 } from "../controllers/adminController.js";
 
+import { protect } from "../middleware/authMiddleware.js";
 import { allowRoles } from "../middleware/roleMiddleware.js";
-import {protect} from "../middleware/authMiddleware.js";
 
 const adminRouter = express.Router();
 
-adminRouter.get("/stats", protect, allowRoles("admin"), getAdminStats);
-adminRouter.get("/users", protect, allowRoles("admin"), getAllUsers);
-adminRouter.get("/rides", protect, allowRoles("admin"), getAllRides);
+// 🔐 Global admin guard (clean approach)
+const adminOnly = [protect, allowRoles("admin")];
 
-adminRouter.delete("/ride/:id", protect, allowRoles("admin"), deleteRide);
-adminRouter.put("/user/block/:id", protect, allowRoles("admin"), blockUser);
 
-adminRouter.get("/users/search", protect, allowRoles("admin"), searchUsers);
-adminRouter.get("/user/:id", protect, allowRoles("admin"), getUserDetails);
 
-adminRouter.put("/ride/:id", protect, allowRoles("admin"), updateRideStatus);
+/* =========================
+   📊 STATS
+========================= */
+adminRouter.get("/stats", adminOnly, getAdminStats);
 
-adminRouter.put("/user/unblock/:id", protect, allowRoles("admin"), unblockUser);
+
+/* =========================
+   👤 USERS
+========================= */
+adminRouter.get("/users", adminOnly, getAllUsers);
+
+adminRouter.get("/users/search", adminOnly, searchUsers);
+
+adminRouter.get("/users/:id", adminOnly, getUserDetails);
+
+adminRouter.put("/users/:id/block", adminOnly, blockUser);
+
+adminRouter.put("/users/:id/unblock", adminOnly, unblockUser);
+
+
+
+/* =========================
+   🚗 RIDES
+========================= */
+adminRouter.get("/rides", adminOnly, getAllRides);
+
+adminRouter.put("/rides/:id", adminOnly, updateRideStatus);
+
+adminRouter.delete("/rides/:id", adminOnly, deleteRide);
 
 export default adminRouter;

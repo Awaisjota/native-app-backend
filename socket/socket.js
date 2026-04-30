@@ -1,7 +1,11 @@
 import { Server } from "socket.io";
 
 let io;
+const onlineUsers = new Map();
 
+/* =========================
+   INIT SOCKET
+========================= */
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
@@ -11,30 +15,56 @@ export const initSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    // console.log("⚡ User connected:", socket.id);
+    console.log("⚡ Connected:", socket.id);
 
-    // 🔥 JOIN ROOM (IMPORTANT)
+    /* =========================
+       USER ONLINE
+    ========================= */
+    socket.on("online", (userId) => {
+      if (!userId) return;
+
+      onlineUsers.set(userId.toString(), socket.id);
+      socket.join(userId.toString());
+    });
+
+    /* =========================
+       JOIN RIDE ROOM
+    ========================= */
     socket.on("joinRide", (rideId) => {
+      if (!rideId) return;
+
       socket.join(rideId);
-      // console.log(`User joined ride: ${rideId}`);
     });
 
-    // 🔥 LEAVE ROOM
+    /* =========================
+       LEAVE RIDE ROOM
+    ========================= */
     socket.on("leaveRide", (rideId) => {
+      if (!rideId) return;
+
       socket.leave(rideId);
-      // console.log(`User left ride: ${rideId}`);
     });
 
+    /* =========================
+       DISCONNECT
+    ========================= */
     socket.on("disconnect", () => {
-      // console.log("❌ User disconnected:", socket.id);
+      for (const [userId, socketId] of onlineUsers.entries()) {
+        if (socketId === socket.id) {
+          onlineUsers.delete(userId);
+          break;
+        }
+      }
+
+      console.log("❌ Disconnected:", socket.id);
     });
   });
 
   return io;
 };
 
-// controller se use karne ke liye
-export const getIO = () => {
-  if (!io) throw new Error("Socket not initialized");
-  return io;
-};
+/* =========================
+   GETTERS
+========================= */
+export const getIO = () => io;
+export const getOnlineUsers = () => onlineUsers;

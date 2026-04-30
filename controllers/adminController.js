@@ -2,30 +2,35 @@ import User from "../models/User.js";
 import Ride from "../models/Ride.js";
 
 /* =========================
+   🔧 HELPERS
+========================= */
+const errorRes = (res, error, status = 500) => {
+  return res.status(status).json({
+    message: error?.message || "Server error",
+  });
+};
+
+/* =========================
    📊 DASHBOARD STATS
 ========================= */
 export const getAdminStats = async (req, res) => {
   try {
-    const users = await User.countDocuments();
-    const rides = await Ride.countDocuments();
+    const [users, rides, activeRides, completedRides] =
+      await Promise.all([
+        User.countDocuments(),
+        Ride.countDocuments(),
+        Ride.countDocuments({ isCompleted: false }),
+        Ride.countDocuments({ isCompleted: true }),
+      ]);
 
-    const activeRides = await Ride.countDocuments({
-      isCompleted: false,
-    });
-
-    const completedRides = await Ride.countDocuments({
-      isCompleted: true,
-    });
-
-    res.json({
+    return res.json({
       users,
       rides,
       activeRides,
       completedRides,
     });
-  } catch (error) {
-    // console.log("ADMIN STATS ERROR:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
@@ -51,8 +56,8 @@ export const getAllUsers = async (req, res) => {
             $size: {
               $filter: {
                 input: "$rides",
-                as: "ride",
-                cond: { $eq: ["$$ride.type", "driver"] },
+                as: "r",
+                cond: { $eq: ["$$r.type", "driver"] },
               },
             },
           },
@@ -61,8 +66,8 @@ export const getAllUsers = async (req, res) => {
             $size: {
               $filter: {
                 input: "$rides",
-                as: "ride",
-                cond: { $eq: ["$$ride.type", "passenger"] },
+                as: "r",
+                cond: { $eq: ["$$r.type", "passenger"] },
               },
             },
           },
@@ -71,17 +76,17 @@ export const getAllUsers = async (req, res) => {
       {
         $project: {
           password: 0,
-          rides: 0,
           refreshToken: 0,
           otp: 0,
           otpExpiry: 0,
+          rides: 0,
         },
       },
     ]);
 
-    res.status(200).json(users);
+    return res.status(200).json(users);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return errorRes(res, err);
   }
 };
 
@@ -90,20 +95,20 @@ export const getAllUsers = async (req, res) => {
 ========================= */
 export const searchUsers = async (req, res) => {
   try {
-    const { keyword } = req.query;
+    const { keyword = "" } = req.query;
 
     const users = await User.find({
       name: { $regex: keyword, $options: "i" },
-    }).select("-password");
+    }).select("-password -refreshToken -otp -otpExpiry");
 
-    res.json(users);
+    return res.json(users);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return errorRes(res, err);
   }
 };
 
 /* =========================
-   👤 GET USER DETAILS
+   👤 USER DETAILS
 ========================= */
 export const getUserDetails = async (req, res) => {
   try {
@@ -112,50 +117,31 @@ export const getUserDetails = async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const rides = await Ride.find({
-      user: user._id,
-    }).sort({ createdAt: -1 });
+    const rides = await Ride.find({ user: user._id }).sort({
+      createdAt: -1,
+    });
 
-    const ridesCount = rides.length;
+    const stats = {
+      ridesCount: rides.length,
+      driverRidesCount: rides.filter((r) => r.type === "driver").length,
+      passengerRidesCount: rides.filter((r) => r.type === "passenger").length,
+      completedRides: rides.filter((r) => r.isCompleted).length,
+      activeRides: rides.filter((r) => !r.isCompleted).length,
+    };
 
-    const driverRidesCount = rides.filter(
-      (ride) => ride.type === "driver"
-    ).length;
-
-    const passengerRidesCount = rides.filter(
-      (ride) => ride.type === "passenger"
-    ).length;
-
-    const completedRides = rides.filter(
-      (ride) => ride.isCompleted
-    ).length;
-
-    const activeRides = rides.filter(
-      (ride) => !ride.isCompleted
-    ).length;
-
-    res.json({
+    return res.json({
       ...user.toObject(),
-
       rides,
-
-      ridesCount,
-      driverRidesCount,
-      passengerRidesCount,
-      completedRides,
-      activeRides,
+      ...stats,
     });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    return errorRes(res, err);
   }
 };
+
 /* =========================
    🚗 GET ALL RIDES
 ========================= */
@@ -165,9 +151,9 @@ export const getAllRides = async (req, res) => {
       .populate("user", "name")
       .sort({ createdAt: -1 });
 
-    res.json(rides);
+    return res.json(rides);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return errorRes(res, err);
   }
 };
 
@@ -176,20 +162,21 @@ export const getAllRides = async (req, res) => {
 ========================= */
 export const updateRideStatus = async (req, res) => {
   try {
-    const { isCompleted } = req.body;
-
     const ride = await Ride.findById(req.params.id);
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    ride.isCompleted = isCompleted;
+    ride.isCompleted = Boolean(req.body.isCompleted);
     await ride.save();
 
-    res.json({ message: "Ride updated", ride });
+    return res.json({
+      message: "Ride updated",
+      ride,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return errorRes(res, err);
   }
 };
 
@@ -206,9 +193,11 @@ export const deleteRide = async (req, res) => {
 
     await ride.deleteOne();
 
-    res.json({ message: "Ride deleted successfully" });
+    return res.json({
+      message: "Ride deleted successfully",
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return errorRes(res, err);
   }
 };
 
@@ -217,34 +206,27 @@ export const deleteRide = async (req, res) => {
 ========================= */
 export const blockUser = async (req, res) => {
   try {
-    const adminId = req.user._id.toString();
+    const adminId = req.user?._id?.toString();
     const targetId = req.params.id;
 
-    // ❌ Prevent self block
     if (adminId === targetId) {
       return res.status(400).json({
-        message: "You cannot block your own account",
+        message: "You cannot block yourself",
       });
     }
 
     const user = await User.findById(targetId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     user.isBlocked = true;
     await user.save();
 
-    res.json({
-      message: "User blocked",
-    });
+    return res.json({ message: "User blocked" });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    return errorRes(res, err);
   }
 };
 
@@ -253,33 +235,26 @@ export const blockUser = async (req, res) => {
 ========================= */
 export const unblockUser = async (req, res) => {
   try {
-    const adminId = req.user._id.toString();
+    const adminId = req.user?._id?.toString();
     const targetId = req.params.id;
 
-    // ❌ Prevent self-unblock/self-modify
     if (adminId === targetId) {
       return res.status(400).json({
-        message: "You cannot modify your own block status",
+        message: "You cannot modify yourself",
       });
     }
 
     const user = await User.findById(targetId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     user.isBlocked = false;
     await user.save();
 
-    res.json({
-      message: "User unblocked successfully",
-    });
+    return res.json({ message: "User unblocked" });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    return errorRes(res, err);
   }
 };

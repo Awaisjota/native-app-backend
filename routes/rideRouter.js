@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   createRide,
   deleteRide,
@@ -15,45 +16,44 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-/* =======================================
-   RIDES
-======================================= */
+/* =========================
+   MIDDLEWARE GROUP
+========================= */
+const auth = protect;
 
-// GET MY RIDES
-router.get("/rides/my-rides", protect, getMyRides);
+/* =========================
+   RIDES (CORE)
+========================= */
 
+// My rides (user specific)
+router.get("/my-rides", auth, getMyRides);
 
-// GET ALL RIDES
-router.get("/rides", protect, getRides);
+// All rides
+router.get("/", auth, getRides);
 
+// Create ride
+router.post("/", auth, createRide);
 
-// GET SINGLE RIDE (DETAIL PAGE)
-router.get("/rides/:id", protect, getSingleRide);
+// Single ride
+router.get("/:id", auth, getSingleRide);
 
-// CREATE RIDE
-router.post("/rides", protect, createRide);
+// Update ride
+router.put("/:id", auth, updateRide);
 
-// UPDATE RIDE
-router.put("/rides/:id", protect, updateRide);
+// Delete rides
+router.delete("/:id", auth, deleteRide);
 
-// DELETE RIDE
-router.delete("/rides/:id", protect, deleteRide);
+// Complete ride
+router.put("/:id/complete", auth, completeRide);
 
-// COMPLETE RIDE (NEW 🔥)
-router.put("/rides/:id/complete", protect, completeRide);
-
-
-
-
-/* =======================================
+/* =========================
    COMMENTS
-======================================= */
+========================= */
 
-// ADD COMMENT
-router.post("/rides/:id/comment", protect, addComment);
+// Add comment
+router.post("/:id/comments", auth, addComment);
 
-// GET COMMENTS
-router.get("/rides/:id/comments", protect, getComments);
-
+// Get comments
+router.get("/:id/comments", auth, getComments);
 
 export default router;

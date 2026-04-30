@@ -1,26 +1,26 @@
 import nodemailer from "nodemailer";
 
-export const sendEmail = async (to, subject, text, html) => {
+export const sendEmail = async ({ to, subject, text, html }) => {
   try {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // ⚠️ use APP PASSWORD here
+        pass: process.env.EMAIL_PASS, // App password only
       },
     });
 
-    const info = await transporter.sendMail({
-      from: `"My App 🚀" <${process.env.EMAIL_USER}>`,
+    await transporter.sendMail({
+      from: `"Haveli Ride 🚖" <${process.env.EMAIL_USER}>`,
       to,
       subject,
-      text,   // fallback text
-      html,   // optional HTML email
+      text,
+      html,
     });
 
-    console.log("✅ Email sent:", info.messageId);
+    console.log("✅ Email sent successfully");
   } catch (error) {
-    console.error("❌ Email sending error:", error.message);
-    throw new Error("Email not sent");
+    console.error("❌ Email error:", error.message);
+    throw error;
   }
 };

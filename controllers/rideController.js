@@ -1,89 +1,116 @@
 import Ride from "../models/Ride.js";
-import {getIO} from "../socket/socket.js";
-/* =======================================
-   CREATE RIDE
-======================================= */
+import User from "../models/User.js";
+import { getIO } from "../socket/socket.js";
+import { sendExpoPushNotification } from "../services/expoPushService.js";
+/* =========================
+   🔧 ERROR HELPER
+========================= */
+const errorRes = (res, error, status = 500) => {
+  return res.status(status).json({
+    message: error?.message || "Server error",
+  });
+};
+
+/* =========================
+   🚗 CREATE RIDE
+========================= */
 export const createRide = async (req, res) => {
   try {
-    // // console.log("BODY:", req.body);
-    // // console.log("USER:", req.user);
-    const newRide = await Ride.create({
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const ride = await Ride.create({
       ...req.body,
       user: req.user._id,
     });
 
-    const ride = await newRide.populate("user", "name email");
+    const populatedRide = await ride.populate("user", "name email");
 
-    // Emit event to all connected clients
-    const io = getIO();
-    io.to("rides").emit("rideCreated", ride);
+    // Socket realtime update
+    getIO().to("rides").emit("rideCreated", populatedRide);
 
-    res.status(201).json({
-      message: "Ride created successfully",
-      ride,
+    // Push notification to all users except creator (optional)
+    const users = await User.find({
+      expoPushToken: { $ne: null },
+      _id: { $ne: req.user._id }, // creator ko skip karna ho to
+    }).select("expoPushToken");
+
+    await sendExpoPushNotification({
+      tokens: users.map((u) => u.expoPushToken),
+      title: "🚗 New Ride Posted",
+      body: `${ride.from} → ${ride.to}`,
+      data: {
+        type: "ride_created",
+        rideId: ride._id,
+      },
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+
+    return res.status(201).json({
+      message: "Ride created successfully",
+      ride: populatedRide,
+    });
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
-/* =======================================
-   GET ALL RIDES
-======================================= */
+/* =========================
+   📥 GET ALL RIDES
+========================= */
 export const getRides = async (req, res) => {
   try {
     const rides = await Ride.find()
       .sort({ createdAt: -1 })
       .populate("user", "name email");
 
-    res.status(200).json(rides);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json(rides);
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
-/* =======================================
-   GET SINGLE RIDE
-======================================= */
+/* =========================
+   📄 SINGLE RIDE
+========================= */
 export const getSingleRide = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id)
       .populate("user", "name email")
-      .populate("comments.user", "name"); // 🔥 added
+      .populate("comments.user", "name");
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    res.status(200).json(ride);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json(ride);
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
-/* =======================================
-   GET MY RIDES
-======================================= */
+/* =========================
+   🙋 MY RIDES
+========================= */
 export const getMyRides = async (req, res) => {
   try {
-    // console.log("USER IN REQUEST:", req.user);
-    if (!req.user) {
-      return res.status(401).json({ message: "User not found in request" });
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     const rides = await Ride.find({ user: req.user._id })
       .populate("user", "name email")
       .sort({ createdAt: -1 });
 
-    res.json(rides);
-  } catch (error) {
-    // console.log("MY RIDES ERROR:", error);
-    res.status(500).json({ message: error.message });
+    return res.json(rides);
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
-/* =======================================
-   UPDATE RIDE (ONLY OWNER)
-======================================= */
+
+/* =========================
+   ✏️ UPDATE RIDE
+========================= */
 export const updateRide = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
@@ -96,36 +123,29 @@ export const updateRide = async (req, res) => {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // 🚫 Prevent editing completed rides
     if (ride.isCompleted) {
       return res.status(400).json({ message: "Ride already completed" });
     }
 
-    // 🔐 prevent manual status hack
     delete req.body.isCompleted;
 
-    const newUpdatedRide = await Ride.findByIdAndUpdate(
+    const updatedRide = await Ride.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
-    );
+      { new: true }
+    ).populate("user", "name email");
 
-    const updatedRide = await newUpdatedRide.populate("user", "name email");
+    getIO().to("rides").emit("rideUpdated", updatedRide);
 
-    // Emit event to all connected clients
-    const io = getIO();
-    io.to("rides").emit("rideUpdated", updatedRide);
-
-
-    res.status(200).json(updatedRide);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json(updatedRide);
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
-/* =======================================
-   DELETE RIDE
-======================================= */
+/* =========================
+   ❌ DELETE RIDE
+========================= */
 export const deleteRide = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
@@ -140,25 +160,32 @@ export const deleteRide = async (req, res) => {
 
     await ride.deleteOne();
 
-    // Emit event to all connected clients
-    const io = getIO();
-    io.to("rides").emit("rideDeleted", ride);
+    getIO().to("rides").emit("rideDeleted", { _id: ride._id });
 
-    res.status(200).json({ message: "Ride deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "Ride deleted successfully" });
+  } catch (err) {
+    return errorRes(res, err);
   }
 };
 
-/* =======================================
-   COMPLETE RIDE
-======================================= */
+/* =========================
+   ✅ COMPLETE RIDE
+========================= */
 export const completeRide = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
+    }
+
+    // 🔒 safety check
+    if (!ride.user) {
+      return res.status(400).json({ message: "Ride user missing" });
+    }
+
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     if (ride.user.toString() !== req.user._id.toString()) {
@@ -168,97 +195,116 @@ export const completeRide = async (req, res) => {
     ride.isCompleted = true;
     await ride.save();
 
-    // Emit event to all connected clients
-    const io = getIO();
-    io.to("rides").emit("rideCompleted", ride);
+    // 🔥 SAFE SOCKET EMIT
+    if (typeof getIO === "function") {
+      getIO().to("rides").emit("rideCompleted", ride);
+    }
 
-
-    res.status(200).json({
-      message: "Ride marked as completed",
+    return res.json({
+      message: "Ride completed",
       ride,
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.log("COMPLETE RIDE ERROR:", err); // 👈 important
+    return res.status(500).json({
+      message: err.message || "Server error",
+    });
   }
 };
-
-/* =======================================
-   ADD COMMENT
-======================================= */
+/* =========================
+   💬 ADD COMMENT
+========================= */
 export const addComment = async (req, res) => {
   try {
+    const { text } = req.body;
+
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: "Comment required" });
+    }
+
     const ride = await Ride.findById(req.params.id);
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    if (!req.user?._id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    const comment = {
+      user: req.user._id,
+      text: text.trim(),
+      createdAt: new Date(),
+    };
 
-    if (!req.body.text?.trim()) {
-      return res.status(400).json({ message: "Comment required" });
-    }
-
-    // 🔥 ensure array
     if (!Array.isArray(ride.comments)) {
       ride.comments = [];
     }
 
-    // new comment
-    const newComment = {
-      user: req.user._id,
-      text: req.body.text.trim(),
-      createdAt: new Date(),
-    };
+    ride.comments.unshift(comment);
 
-    ride.comments.unshift(newComment);
-
-    // save
     await ride.save();
 
-    // 🔥 RE-FETCH (FIX FOR REALTIME + POPULATE ISSUE)
     const updatedRide = await Ride.findById(req.params.id).populate(
       "comments.user",
       "name"
     );
 
-    const latestComment = updatedRide.comments[0];
+    const latestComment = updatedRide?.comments?.[0];
 
-    // socket
-    const io = getIO();
+    if (!latestComment) {
+      return res.status(500).json({ message: "Comment creation failed" });
+    }
 
-const commentPayload = {
-  ...latestComment.toObject?.() || latestComment,
-  rideId: req.params.id,
-};
+    const payload = {
+      ...latestComment.toObject?.(),
+      rideId: req.params.id,
+    };
 
-io.to(req.params.id).emit("commentAdded", commentPayload);
+    // 🔥 SAFE SOCKET EMIT (NO CRASH IF SOCKET FAILS)
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(req.params.id).emit("commentAdded", payload);
+      }
+    } catch (socketErr) {
+      console.log("Socket emit error:", socketErr.message);
+    }
 
-return res.status(201).json(commentPayload)
-
-  } catch (error) {
-    // console.log("COMMENT ERROR:", error);
-    return res.status(500).json({ message: error.message });
+    return res.status(201).json(payload);
+  } catch (err) {
+    console.log("ADD COMMENT ERROR:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
-/* =======================================
-   GET COMMENTS
-======================================= */
+
+/* =========================
+   📥 GET COMMENTS
+========================= */
 export const getComments = async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id).populate(
       "comments.user",
-      "name",
+      "name"
     );
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    res.status(200).json(ride.comments);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const comments = Array.isArray(ride.comments)
+      ? ride.comments
+      : [];
+
+    // 🔥 latest first (important for UI consistency)
+    comments.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    return res.status(200).json(comments);
+  } catch (err) {
+    console.log("GET COMMENTS ERROR:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };

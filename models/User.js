@@ -2,11 +2,7 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    name: { type: String, required: true, trim: true },
 
     email: {
       type: String,
@@ -16,11 +12,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
-    contactNumber: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    contactNumber: { type: String, required: true, trim: true },
 
     password: {
       type: String,
@@ -34,29 +26,23 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
-    // ⛔ ADD THIS
     isBlocked: {
       type: Boolean,
       default: false,
     },
 
-    // 📍 Location
     city: {
       type: String,
       required: true,
     },
 
-    address: {
-      type: String, // optional
-    },
+    address: String,
 
-    // 📸 Profile Image (optional)
     profileImage: {
       type: String,
       default: "",
     },
 
-    // 🔐 Auth
     refreshToken: String,
 
     tokenVersion: {
@@ -64,10 +50,20 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
+    expoPushToken: {
+      type: String,
+      default: null,
+    },
+
     otp: String,
     otpExpiry: Date,
   },
   { timestamps: true },
 );
+
+/* ❌ REMOVE THIS IF YOU HAVE IT ANYWHERE:
+userSchema.index({ email: 1 });
+userSchema.index({ isBlocked: 1 });
+*/
 
 export default mongoose.model("User", userSchema);
